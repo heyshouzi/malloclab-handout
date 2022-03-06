@@ -112,11 +112,11 @@ int mm_init(void)
 
 void *mm_malloc(size_t size)
 {
-    size_t asize;
+    size_t asize;   /* Adjusted block size */
     char *bp;
     size_t extendsize;
     if(size <= 0){
-        return 0;
+        return NULL;
     }
     if(size <= DSIZE) {
         asize = 2*DSIZE;
@@ -124,25 +124,20 @@ void *mm_malloc(size_t size)
     else{
         asize = ALIGN(size) + DSIZE;
         }
+
+    /* search the free list for a list    */ 
     if((bp = find_fit(asize)) != NULL) {
         place(bp,asize);
         return bp;
         }
+
+    /* no fit found.Get more memory and place the block */   
     extendsize = MAX(asize,CHUNKSIZE);
     if((bp = extend_heap(extendsize/WSIZE)) == NULL){
         return NULL;
         }
     place(bp, asize);
     return bp;
-    
-    // int newsize = ALIGN(size + SIZE_T_SIZE);
-    // void *p = mem_sbrk(newsize);
-    // if (p == (void *)-1)
-	// return NULL;
-    // else {
-    //     *(size_t *)p = size;
-    //     return (void *)((char *)p + SIZE_T_SIZE);
-    // }
 }
 
 /*
