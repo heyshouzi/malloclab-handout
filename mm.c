@@ -70,6 +70,8 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE((char *)((bp)-WSIZE)))
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)((bp)-DSIZE)))
 
+
+
 static void *extend_heap(size_t words);
 static void *coalesce(char *bp);
 static void *remove_freeblock(char *pr);
@@ -84,15 +86,20 @@ static char* heap_listp;
  */
 int mm_init(void)
 {
-    
+    //初始化申请一个最小块（32 bytes）包括：1 * 对齐块 + 2 * 序言块 + 1 * 结尾块 
     if ((heap_listp = mem_sbrk(4 *WSIZE)) == (void *)-1 )
         return -1;
+    //对齐块    
     PUT(heap_listp, 0);
+    //序言块
     PUT(heap_listp + (WSIZE),PACK(DSIZE,1));
     PUT(heap_listp + (2*WSIZE),PACK(DSIZE,1));
+    //结尾块
     PUT(heap_listp + (3*WSIZE),PACK(0,1));
+    //将heap_listp 指向第二个序言块
     heap_listp += (2*WSIZE);
 
+    //向内存系统申请额外的堆空间（1k words）
     if(extend_heap(CHUNKSIZE/WSIZE)==NULL)
         return -1;
     return 0;
@@ -102,6 +109,7 @@ int mm_init(void)
  * mm_malloc - Allocate a block by incrementing the brk pointer.
  *     Always allocate a block whose size is a multiple of the alignment.
  */
+
 void *mm_malloc(size_t size)
 {
     size_t asize;
@@ -114,18 +122,19 @@ void *mm_malloc(size_t size)
         asize = 2*DSIZE;
     }
     else{
-        asize = ALIGN(size);
-        if((bp = find_fit(asize)) != NULL) {
-            place(bp,asize);
-            return bp;
+        asize = ALIGN(size) + DSIZE;
         }
-        extendsize = MAX(asize,CHUNKSIZE);
-        if((bp = extend_heap(extendsize/WSIZE)) == NULL){
-            return NULL;
-        }
-        place(bp, asize);
+    if((bp = find_fit(asize)) != NULL) {
+        place(bp,asize);
         return bp;
-    }
+        }
+    extendsize = MAX(asize,CHUNKSIZE);
+    if((bp = extend_heap(extendsize/WSIZE)) == NULL){
+        return NULL;
+        }
+    place(bp, asize);
+    return bp;
+    
     // int newsize = ALIGN(size + SIZE_T_SIZE);
     // void *p = mem_sbrk(newsize);
     // if (p == (void *)-1)
@@ -172,16 +181,16 @@ void *mm_realloc(void *ptr, size_t size)
 
 static void *extend_heap(size_t words) {
     char *bp;
-    size_t size;
-    size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
-    if(size < MINBLSIZE)
-        size = MINBLSIZE;
-    if((long)(bp = mem_sbrk(size)) == -1) {
+    size_t asize;
+    asize = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
+    if(asize < MINBLSIZE)
+        asize = MINBLSIZE;
+    if((long)(bp = mem_sbrk(asize)) == -1) {
         return NULL;
     }
-    PUT(HDRP(bp),PACK(size,0));
-    PUT(FTRP(bp),PACK(size,0));
-
+    PUT(HDRP(bp),PACK(asize,0));
+    PUT(FTRP(bp),PACK(asize,0));
+    PUT(HDRP(NEXT_BLKP(bp)),PACK(0,1));
     return coalesce(bp);
 
 }
@@ -199,15 +208,15 @@ static void *coalesce(char *bp)
     else if (prev_alloc && !next_alloc) {
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp),PACK(size,0));
-        remove_freeblock(FTRP(bp));
-        remove_freeblock(HDRP(NEXT_BLKP(bp)));
+        // remove_freeblock(FTRP(bp));
+        // remove_freeblock(HDRP(NEXT_BLKP(bp)));
         PUT(FTRP(NEXT_BLKP(bp)),PACK(size,0));
     }
     else if (!prev_alloc && next_alloc) {
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp),PACK(size,0));
-        remove_freeblock(HDRP(bp));
-        remove_freeblock(FTRP(PREV_BLKP(bp)));
+        // remove_freeblock(HDRP(bp));
+        // remove_freeblock(FTRP(PREV_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)),PACK(size,0));
         bp = HDRP(PREV_BLKP(bp));
     }
@@ -215,21 +224,21 @@ static void *coalesce(char *bp)
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)),PACK(size,0));
         PUT(FTRP(NEXT_BLKP(bp)),PACK(size,0));
-        remove_freeblock(HDRP(bp));
-        remove_freeblock(FTRP(bp));
-        remove_freeblock(FTRP(PREV_BLKP(bp)));
-        remove_freeblock(HDRP(NEXT_BLKP(bp)));
+        // remove_freeblock(HDRP(bp));
+        // remove_freeblock(FTRP(bp));
+        // remove_freeblock(FTRP(PREV_BLKP(bp)));
+        // remove_freeblock(HDRP(NEXT_BLKP(bp)));
     }
 
     return bp;
 
 }
-
+/* 
 static void* remove_freeblock(char *pr)
 {
     PUT((int *)pr,PACK(0,0));
     return (char *)pr;
-}
+} */
 
 static char *find_fit(size_t asize)
 {
